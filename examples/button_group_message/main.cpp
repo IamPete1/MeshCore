@@ -58,6 +58,11 @@
   #define BUTTON_MESSAGE  "StopStopStop"
 #endif
 
+// How long the display stays on after a short press of the user button
+#ifndef DISPLAY_ON_MILLIS
+  #define DISPLAY_ON_MILLIS 10000
+#endif
+
 #include <helpers/BaseChatMesh.h>
 
 #define SEND_TIMEOUT_BASE_MILLIS          500
@@ -168,6 +173,10 @@ public:
 
 #ifdef DISPLAY_CLASS
 static void powerOff() {
+  if (!display.isOn()) {
+    display.turnOn();
+  }
+
   display.startFrame();
   display.setTextSize(2);
   display.setCursor(0, 8);
@@ -231,20 +240,35 @@ void loop() {
   the_mesh.loop();
   rtc_clock.tick();
 
+  const unsigned long now_ms = millis();
   static unsigned long last_send_ms = 0;
-  if (button.isPressed() && millis() - last_send_ms >= 1000) {
-    last_send_ms = millis();
+  if (button.isPressed() && now_ms - last_send_ms >= 1000) {
+    last_send_ms = now_ms;
     the_mesh.sendButtonMessage();
   }
 
-  if (user_btn.check() == BUTTON_EVENT_LONG_PRESS) {
+#ifdef DISPLAY_CLASS
+  static unsigned long display_on_ms = 0;
+  static unsigned long last_display_ms = 0;
+
+  int btn_event = user_btn.check();
+  if (btn_event == BUTTON_EVENT_LONG_PRESS) {
     powerOff();
+  } else if (btn_event != BUTTON_EVENT_NONE) {
+    // Short press (or multi-click): turn the display on, or extend the timeout if already on
+    if (!display.isOn()) {
+      display.turnOn();
+    }
+    display_on_ms = now_ms;
+    last_display_ms = 0;
   }
 
-#ifdef DISPLAY_CLASS
-  static unsigned long last_display_ms = 0;
-  if (millis() - last_display_ms >= 1000) {
-    last_display_ms = millis();
+  if (display.isOn() && now_ms - display_on_ms >= DISPLAY_ON_MILLIS) {
+    display.turnOff();
+  }
+
+  if (display.isOn() && now_ms - last_display_ms >= 1000) {
+    last_display_ms = now_ms;
     uint16_t mv = board.getBattMilliVolts();
     int pct = constrain((int)(mv - 3000) * 100 / 1200, 0, 100);
     char buf[16];
