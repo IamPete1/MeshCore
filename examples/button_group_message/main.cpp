@@ -48,7 +48,7 @@
   #define GROUP_PSK  "LKaloQVV3gxuP+/5FMn6CQ=="
 #endif
 
-// Node display name (stored in flash after first boot)
+// Node display name (always taken from the build, never from flash)
 #ifndef NODE_NAME
   #define NODE_NAME  "ButtonNode"
 #endif
@@ -82,9 +82,7 @@ protected:
   int calcRxDelay(float score, uint32_t air_time) const override { return 0; }
   bool allowPacketForward(const mesh::Packet* packet) override { return true; }
 
-  void onDiscoveredContact(ContactInfo& contact, bool is_new, uint8_t path_len, const uint8_t* path) override {
-    Serial.printf("ADVERT from: %s\n", contact.name);
-  }
+  void onDiscoveredContact(ContactInfo& contact, bool is_new, uint8_t path_len, const uint8_t* path) override { }
 
   void onContactPathUpdated(const ContactInfo& contact) override { }
 
@@ -131,11 +129,12 @@ public:
     _fs = &fs;
     BaseChatMesh::begin();
 
+    // Only the key pair is persisted; the name always comes from NODE_NAME so
+    // reflashing with a different build env renames the node.
     IdentityStore store(fs, "/identity");
-    if (!store.load("_main", self_id, _node_name, sizeof(_node_name))) {
+    if (!store.load("_main", self_id)) {
       // No stored identity — generate a new one from radio noise entropy
       self_id = radio_new_identity();
-      strncpy(_node_name, NODE_NAME, sizeof(_node_name) - 1);
       store.save("_main", self_id, _node_name);
       Serial.println("New identity created.");
     }
